@@ -232,8 +232,13 @@ function solve(s)
             continue
         end
 
-        if useHiddenSets(s)
-            print("Hidden Set deduction used")
+        if useHiddenSet(s)
+            println("Hidden Set deduction used")
+            continue
+        end
+
+        if useNakedSet(s)
+            println("Naked Set deduction used")
             continue
         end
 
@@ -251,7 +256,7 @@ end
 """
     useSingle(s)
 
-Searches for a naked or hidden single in the sudoku s. If one is found, the forced entry is added and the function returns. A detailed explanation
+Searches for a naked or hidden single in the sudoku s. If one is found, the forced entry is added and the function return true. A detailed explanation
 of this strategy can be found here: http://www.taupierbw.be/SudokuCoach/SC_Singles.shtml
 
 # Arguments
@@ -308,15 +313,15 @@ end
 
 
 """
-    useHiddenSets(s)
+    useHiddenSet(s)
 
-Searches for a hidden pair/triple/quad in the sudoku s. If one is found, the candidates are removed and the function returns. A detailed explanation
+Searches for a hidden pair/triple/quad in the sudoku s. If one is found, the candidates are removed and the function returns true. A detailed explanation
 of this strategy can be found here: https://www.sudokuwiki.org/Hidden_Candidates
 
 # Arguments
 * `s`: Sudoku
 """
-function useHiddenSets(s::Sudoku)
+function useHiddenSet(s::Sudoku)
     for c in 2 : 4  # size of hidden set
         for g in 1 : 9  # row
             # more than c tiles free
@@ -338,7 +343,7 @@ function useHiddenSets(s::Sudoku)
                 end
 
                 if hidden
-                    effective = false  # hidden pair actually allows deduction
+                    effective = false  # hidden set actually allows deduction
 
                     for (i, j) in s.occRow[g, first(set)]
                         for n in 1 : 9
@@ -376,7 +381,7 @@ function useHiddenSets(s::Sudoku)
                 end
 
                 if hidden
-                    effective = false  # hidden pair actually allows deduction
+                    effective = false  # hidden set actually allows deduction
 
                     for (i, j) in s.occCol[g, first(set)]  # hidden set
                         for n in 1 : 9
@@ -414,13 +419,167 @@ function useHiddenSets(s::Sudoku)
                 end
 
                 if hidden
-                    effective = false  # hidden pair actually allows deduction
+                    effective = false  # hidden set actually allows deduction
 
                     for (i, j) in s.occBlock[g, first(set)]  # hidden set
                         for n in 1 : 9
                             if !(n in set) && n in s.candidates[i, j]
                                 effective = true
                                 remCandidate(s, i, j, n)
+                            end
+                        end
+                    end
+
+                    if effective
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+
+"""
+    useNakedSet(s)
+
+Searches for a naked pair/triple/quad in the sudoku s. If one is found, the candidates are removed and the function returns true. A detailed explanation
+of this strategy can be found here: https://www.sudokuwiki.org/Naked_Candidates
+
+# Arguments
+* `s`: Sudoku
+"""
+function useNakedSet(s::Sudoku)
+    for c in 2 : 4  # size of naked set
+        for g in 1 : 9  # row
+            # more than c tiles free
+            if sum([!s.solved[i, j] for (i, j) in ROWS[g]]) <= c
+                continue
+            end
+
+            # unsolved tiles with <= c candidates
+            tiles = filter(t -> length(s.candidates[t[1], t[2]]) <= c && !s.solved[t[1], t[2]], ROWS[g])
+
+            for set in combinations(tiles, c)
+                naked = true
+                collect = Set()
+
+                for (i, j) in set
+                    for e in s.candidates[i, j]
+                        push!(collect, e)
+                    end
+
+                    if length(collect) > c
+                        # not a naked set since union of candidates has more than c elements
+                        naked = false
+                        break
+                    end
+                end
+
+                if naked
+                    effective = false  # naked set actually allows deduction
+
+                    for (i, j) in ROWS[g]
+                        if !((i, j) in set)  # not part of naked set
+                            for n in collect
+                                if n in s.candidates[i, j]
+                                    effective = true
+                                    remCandidate(s, i, j, n) 
+                                end
+                            end
+                        end
+                    end
+
+                    if effective
+                        return true
+                    end
+                end
+            end
+        end
+
+        for g in 1 : 9  # column
+            # more than c tiles free
+            if sum([!s.solved[i, j] for (i, j) in COLS[g]]) <= c
+                continue
+            end
+
+            # unsolved tiles with <= c candidates
+            tiles = filter(t -> length(s.candidates[t[1], t[2]]) <= c && !s.solved[t[1], t[2]], COLS[g])
+
+            for set in combinations(tiles, c)
+                naked = true
+                collect = Set()
+
+                for (i, j) in set
+                    for e in s.candidates[i, j]
+                        push!(collect, e)
+                    end
+
+                    if length(collect) > c
+                        # not a naked set since union of candidates has more than c elements
+                        naked = false
+                        break
+                    end
+                end
+
+                if naked
+                    effective = false  # naked set actually allows deduction
+
+                    for (i, j) in COLS[g]
+                        if !((i, j) in set)  # not part of naked set
+                            for n in collect
+                                if n in s.candidates[i, j]
+                                    effective = true
+                                    remCandidate(s, i, j, n) 
+                                end
+                            end
+                        end
+                    end
+
+                    if effective
+                        return true
+                    end
+                end
+            end
+        end
+
+        for g in 1 : 0 # TODO 9  # block
+            # more than c tiles free
+            if sum([!s.solved[i, j] for (i, j) in BLOCKS[g]]) <= c
+                continue
+            end
+
+            # unsolved tiles with <= c candidates
+            tiles = filter(t -> length(s.candidates[t[1], t[2]]) <= c && !s.solved[t[1], t[2]], BLOCKS[g])
+
+            for set in combinations(tiles, c)
+                naked = true
+                collect = Set()
+
+                for (i, j) in set
+                    for e in s.candidates[i, j]
+                        push!(collect, e)
+                    end
+
+                    if length(collect) > c
+                        # not a naked set since union of candidates has more than c elements
+                        naked = false
+                        break
+                    end
+                end
+
+                if naked
+                    effective = false  # naked set actually allows deduction
+
+                    for (i, j) in BLOCKS[g]
+                        if !((i, j) in set)  # not part of naked set
+                            for n in collect
+                                if n in s.candidates[i, j]
+                                    effective = true
+                                    remCandidate(s, i, j, n) 
+                                end
                             end
                         end
                     end
