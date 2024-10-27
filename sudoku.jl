@@ -190,7 +190,7 @@ Detect if sudoku is invalid because a unsolved tile has no candidates left
 function isValid(s::Sudoku)
     for x in 1 : 9
         for y in 1 : 9
-            if isempty(s.tiles[x, y])
+            if isempty(s.candidates[x, y])
                 return false
             end
         end
@@ -199,5 +199,109 @@ function isValid(s::Sudoku)
     return true
 end
 
+
+"""
+    isDone(s)
+
+Detect if sudoku is done because every tile is filled
+
+# Arguments
+* `s`: Sudoku
+"""
+function isDone(s::Sudoku)
+    for x in 1 : 9
+        for y in 1 : 9
+            if !s.solved[x, y]
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
+
+"""
+    solve(s)
+
+Attempts to solve the sudoku s without guessing by repeatedly applying various deduction strategies
+
+# Arguments
+* `s`: Sudoku
+"""
+function solve(s)
+    while !isDone(s) && isValid(s)
+        if useSingle(s)
+            continue
+        end
+
+        break
+    end
+
+    if !isValid(s)
+        println("Unsatisfiable Sudoku")
+    end
+
+    return s
+end
+
+
+"""
+    useSingle(s)
+
+Searches for a naked or hidden single in the sudoku s. If one is found, the forced entry is added and the function returns. A detailed explanation
+of this strategy can be found here: http://www.taupierbw.be/SudokuCoach/SC_Singles.shtml
+
+# Arguments
+* `s`: Sudoku
+"""
+function useSingle(s::Sudoku)
+    # Find naked single (only one candidate left in cell)
+    for x in 1 : 9
+        for y in 1 : 9
+            if length(s.candidates[x, y]) == 1
+                if !s.solved[x, y]
+                    add(s, x, y, first(s.candidates[x, y]))
+                    return true
+                end
+            end
+        end
+    end
+
+    # Find hidden single (number only appears in one candidate list of a row/column/block)
+    for num in 1 : 9
+        for g in 1 : 9
+            if length(s.occRow[g, num]) == 1
+                (x, y) = first(s.occRow[g, num])
+                if !s.solved[x, y]
+                    add(s, x, y, num)
+                    return true
+                end
+            end
+        end
+
+        for g in 1 : 9
+            if length(s.occCol[g, num]) == 1
+                (x, y) = first(s.occCol[g, num])
+                if !s.solved[x, y]
+                    add(s, x, y, num)
+                    return true
+                end
+            end
+        end
+
+        for g in 1 : 9
+            if length(s.occBlock[g, num]) == 1
+                (x, y) = first(s.occBlock[g, num])
+                if !s.solved[x, y]
+                    add(s, x, y, num)
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
 
 # (c) Mia Muessig
