@@ -1,3 +1,5 @@
+using Combinatorics
+
 ROWS = [[(i, j) for j in 1:9] for i in 1:9]
 COLS = [[(i, j) for i in 1:9] for j in 1:9]
 BLOCKS = [[(by + j, bx + i) for i in 0:2, j in 0:2] for bx in 1:3:9, by in 1:3:9]
@@ -117,12 +119,7 @@ function addToRow(s::Sudoku, x::Int, y::Int, num::Int)
     # the added value num can be removed as a candidate from all other tiles in the row
     for (i, j) in ROWS[x]
         if j != y
-            b = ((i-1) ÷ 3) * 3 + ((j-1) ÷ 3) + 1
-
-            delete!(s.candidates[i, j], num)
-            delete!(s.occRow[x, num], (i, j))
-            delete!(s.occCol[j, num], (i, j))
-            delete!(s.occBlock[b, num], (i, j))
+            remCandidate(s, i, j, num)
         end
     end
 
@@ -138,12 +135,7 @@ function addToCol(s::Sudoku, x::Int, y::Int, num::Int)
     # the added value num can be removed as a candidate from all other tiles in the column
     for (i, j) in COLS[y]
         if i != x
-            b = ((i-1) ÷ 3) * 3 + ((j-1) ÷ 3) + 1
-
-            delete!(s.candidates[i, j], num)
-            delete!(s.occCol[y, num], (i, j))
-            delete!(s.occRow[i, num], (i, j))
-            delete!(s.occBlock[b, num], (i, j))
+            remCandidate(s, i, j, num)
         end
     end
 
@@ -156,17 +148,14 @@ function addToCol(s::Sudoku, x::Int, y::Int, num::Int)
 end
 
 function addToBlock(s::Sudoku, x::Int, y::Int, num::Int)
-    # determine which block (x, y) is contained
+    # determine in which block (x, y) is contained
     b = ((x-1) ÷ 3) * 3 + ((y-1) ÷ 3) + 1
 
 
     # the added value num can be removed as a candidate from all other tiles in the block
     for (i, j) in BLOCKS[b]
         if (i, j) != (x, y)
-            delete!(s.candidates[i, j], num)
-            delete!(s.occBlock[b, num], (i, j))
-            delete!(s.occRow[i, num], (i, j))
-            delete!(s.occCol[j, num], (i, j))
+            remCandidate(s, i, j, num)
         end
     end
 
@@ -178,6 +167,14 @@ function addToBlock(s::Sudoku, x::Int, y::Int, num::Int)
     end
 end
 
+function remCandidate(s::Sudoku, i::Int, j::Int, num::Int)
+    b = ((i-1) ÷ 3) * 3 + ((j-1) ÷ 3) + 1  # determine in which block (x, y) is contained
+
+    delete!(s.candidates[i, j], num)  # remove as candidate
+    delete!(s.occRow[i, num], (i, j))  # remove from row possibilities for num
+    delete!(s.occCol[j, num], (i, j))  # remove from col possibilities for num
+    delete!(s.occBlock[b, num], (i, j))  # remove from block possibilities for num
+end
 
 """
     isValid(s)
@@ -232,6 +229,11 @@ Attempts to solve the sudoku s without guessing by repeatedly applying various d
 function solve(s)
     while !isDone(s) && isValid(s)
         if useSingle(s)
+            continue
+        end
+
+        if useHiddenSets(s)
+            print("Hidden Set deduction used")
             continue
         end
 
@@ -296,6 +298,136 @@ function useSingle(s::Sudoku)
                 if !s.solved[x, y]
                     add(s, x, y, num)
                     return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+
+"""
+    useHiddenSets(s)
+
+Searches for a hidden pair/triple/quad in the sudoku s. If one is found, the candidates are removed and the function returns. A detailed explanation
+of this strategy can be found here: https://www.sudokuwiki.org/Hidden_Candidates
+
+# Arguments
+* `s`: Sudoku
+"""
+function useHiddenSets(s::Sudoku)
+    for c in 2 : 4  # size of hidden set
+        for g in 1 : 9  # row
+            # more than c tiles free
+            if sum([!s.solved[i, j] for (i, j) in ROWS[g]]) <= c
+                continue
+            end
+
+            # numbers which can be placed in exactly c tiles in row g
+            nums = filter(n -> length(s.occRow[g, n]) == c, 1:9)
+
+            for set in combinations(nums, c)
+                hidden = true
+                for (i, e) in enumerate(set)
+                    if i != 1 && s.occRow[g, e] != s.occRow[g, first(set)]
+                        # not a hidden set
+                        hidden = false
+                        break
+                    end
+                end
+
+                if hidden
+                    effective = false  # hidden pair actually allows deduction
+
+                    for (i, j) in s.occRow[g, first(set)]
+                        for n in 1 : 9
+                            if !(n in set) && n in s.candidates[i, j]
+                                effective = true
+                                remCandidate(s, i, j, n)
+                            end
+                        end
+                    end
+
+                    if effective
+                        return true
+                    end
+                end
+            end
+        end
+
+        for g in 1 : 9  # column
+            # more than c tiles free
+            if sum([!s.solved[i, j] for (i, j) in COLS[g]]) <= c
+                continue
+            end
+
+            # numbers which can be placed in exactly c tiles in column g
+            nums = filter(n -> length(s.occCol[g, n]) == c, 1:9)
+
+            for set in combinations(nums, c)
+                hidden = true
+                for (i, e) in enumerate(set)
+                    if i != 1 && s.occCol[g, e] != s.occCol[g, first(set)]
+                        # not a hidden set
+                        hidden = false
+                        break
+                    end
+                end
+
+                if hidden
+                    effective = false  # hidden pair actually allows deduction
+
+                    for (i, j) in s.occCol[g, first(set)]  # hidden set
+                        for n in 1 : 9
+                            if !(n in set) && n in s.candidates[i, j]
+                                effective = true
+                                remCandidate(s, i, j, n)
+                            end
+                        end
+                    end
+
+                    if effective
+                        return true
+                    end
+                end
+            end
+        end
+
+        for g in 1 : 9  # block
+            # more than c tiles free
+            if sum([!s.solved[i, j] for (i, j) in BLOCKS[g]]) <= c
+                continue
+            end
+
+            # numbers which can be placed in exactly c tiles in block g
+            nums = filter(n -> length(s.occBlock[g, n]) == c, 1:9)
+
+            for set in combinations(nums, c)
+                hidden = true
+                for (i, e) in enumerate(set)
+                    if i != 1 && s.occBlock[g, e] != s.occBlock[g, first(set)]
+                        # not a hidden set
+                        hidden = false
+                        break
+                    end
+                end
+
+                if hidden
+                    effective = false  # hidden pair actually allows deduction
+
+                    for (i, j) in s.occBlock[g, first(set)]  # hidden set
+                        for n in 1 : 9
+                            if !(n in set) && n in s.candidates[i, j]
+                                effective = true
+                                remCandidate(s, i, j, n)
+                            end
+                        end
+                    end
+
+                    if effective
+                        return true
+                    end
                 end
             end
         end
