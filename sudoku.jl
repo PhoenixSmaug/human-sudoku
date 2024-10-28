@@ -61,7 +61,7 @@ end
 """
     read(str)
 
-Construct a Sudoku based on the string representation, so 81 characters with empty spaces being encoded as "0", "_", "," or "*".
+Construct a Sudoku based on the string representation, so 81 characters with empty spaces being encoded as "0", "_", ",", "." or "*".
 
 # Arguments
 * `str`: Input string
@@ -69,7 +69,7 @@ Construct a Sudoku based on the string representation, so 81 characters with emp
 function read(str::String)
     # Preprocess string
     str = replace(str, "\n" => "")
-    str = replace(str, '*' => '0', ',' => '0', '_' => '0')
+    str = replace(str, '*' => '0', ',' => '0', '_' => '0', '.' => '0')
     
     if length(str) != 81
         println("Invalid string length")
@@ -230,34 +230,57 @@ Attempts to solve the sudoku s without guessing by repeatedly applying various d
 # Arguments
 * `s`: Sudoku
 """
-function solve(s)
+function solve(s; verbose = true)
+    hardness = 0  # how sophisticated the strategy needed to be
+
     while !isDone(s) && isValid(s)
         if useSingle(s)
+            hardness = max(hardness, 1)
             continue
         end
 
         if useHiddenSet(s)
-            println("Hidden Set deduction used")
+            if verbose
+                println("Hidden Set deduction used")
+            end
+
+            hardness = max(hardness, 2)
             continue
         end
 
         if useNakedSet(s)
-            println("Naked Set deduction used")
+            if verbose
+                println("Naked Set deduction used")
+            end
+
+            hardness = max(hardness, 3)
             continue
         end
 
         if usePointingSet(s)
-            println("Pointing Set deduction used")
+            if verbose
+                println("Pointing Set deduction used")
+            end
+
+            hardness = max(hardness, 4)
             continue
         end
 
         if useBoxReduction(s)
-            println("Box Reduction deduction used")
+            if verbose
+                println("Box Reduction deduction used")
+            end
+
+            hardness = max(hardness, 5)
             continue
         end
 
         if useXWing(s)
-            println("X-Wing deduction used")
+            if verbose
+                println("X-Wing deduction used")
+            end
+            
+            hardness = max(hardness, 6)
             continue
         end
 
@@ -268,7 +291,11 @@ function solve(s)
         println("Unsatisfiable Sudoku")
     end
 
-    return s
+    if !isDone(s)
+        hardness = 7
+    end
+
+    return hardness
 end
 
 
