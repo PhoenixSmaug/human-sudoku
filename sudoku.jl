@@ -231,7 +231,7 @@ Attempts to solve the sudoku s without guessing by repeatedly applying various d
 * `s`: Sudoku
 """
 function solve(s; verbose = true)
-    hardness = 0  # how sophisticated the strategy needed to be
+    hardness = 0  # what level of strategy needed
 
     while !isDone(s) && isValid(s)
         if useSingle(s)
@@ -591,7 +591,7 @@ function useNakedSet(s::Sudoku)
             end
         end
 
-        for g in 1 : 0 # TODO 9  # block
+        for g in 1 : 9  # block
             # more than c tiles free
             if sum([!s.solved[i, j] for (i, j) in BLOCKS[g]]) <= c
                 continue

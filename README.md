@@ -9,7 +9,7 @@ The aim of this solver is not to be as fast as possible - like my other solvers 
 * [Box Reduction](http://www.taupierbw.be/SudokuCoach/SC_BoxReduction.shtml)
 * [X-Wing](http://www.taupierbw.be/SudokuCoach/SC_XWing.shtml)
 
-Looking at the approximately 50,000 possible Sudokus with 17 clues (the smallest number of clues that allow unique solutions), one can see the highest level of strategy required to solve them:
+Looking at the approximately 50,000 possible Sudokus with 17 clues (the smallest number of clues that allow unique solutions), we can plot the highest level of strategy required to solve them:
 
 
 ![Benchmark Plot](data/benchmark.png "Benchmark Data")
