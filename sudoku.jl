@@ -4,6 +4,7 @@ ROWS = [[(i, j) for j in 1:9] for i in 1:9]
 COLS = [[(i, j) for i in 1:9] for j in 1:9]
 BLOCKS = [[(by + j, bx + i) for i in 0:2, j in 0:2] for bx in 1:3:9, by in 1:3:9]
 
+
 """
     Sudoku
 
@@ -149,7 +150,7 @@ end
 
 function addToBlock(s::Sudoku, x::Int, y::Int, num::Int)
     # determine in which block (x, y) is contained
-    b = ((x-1) ÷ 3) * 3 + ((y-1) ÷ 3) + 1
+    b = coord2Box(x, y)
 
 
     # the added value num can be removed as a candidate from all other tiles in the block
@@ -168,12 +169,15 @@ function addToBlock(s::Sudoku, x::Int, y::Int, num::Int)
 end
 
 function remCandidate(s::Sudoku, i::Int, j::Int, num::Int)
-    b = ((i-1) ÷ 3) * 3 + ((j-1) ÷ 3) + 1  # determine in which block (x, y) is contained
-
     delete!(s.candidates[i, j], num)  # remove as candidate
     delete!(s.occRow[i, num], (i, j))  # remove from row possibilities for num
     delete!(s.occCol[j, num], (i, j))  # remove from col possibilities for num
-    delete!(s.occBlock[b, num], (i, j))  # remove from block possibilities for num
+    delete!(s.occBlock[coord2Box(i, j), num], (i, j))  # remove from block possibilities for num
+end
+
+@inline function coord2Box(i::Int, j::Int)
+    # determine in which block tile (i, j) is contained
+    return ((i-1) ÷ 3) * 3 + ((j-1) ÷ 3) + 1
 end
 
 """
@@ -239,6 +243,21 @@ function solve(s)
 
         if useNakedSet(s)
             println("Naked Set deduction used")
+            continue
+        end
+
+        if usePointingSet(s)
+            println("Pointing Set deduction used")
+            continue
+        end
+
+        if useBoxReduction(s)
+            println("Box Reduction deduction used")
+            continue
+        end
+
+        if useXWing(s)
+            println("X-Wing deduction used")
             continue
         end
 
@@ -586,6 +605,192 @@ function useNakedSet(s::Sudoku)
 
                     if effective
                         return true
+                    end
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+
+"""
+    usePointingSet(s)
+
+Searches for a pointing pair/triple in the sudoku s. If one is found, the candidates are removed and the function returns true. A detailed explanation
+of this strategy can be found here: http://www.taupierbw.be/SudokuCoach/SC_PointingPair.shtml
+
+# Arguments
+* `s`: Sudoku
+"""
+function usePointingSet(s::Sudoku)
+    for g in 1 : 9  # block
+        for n in 1 : 9
+            x = first(s.occBlock[g, n])[1]
+            y = first(s.occBlock[g, n])[1]
+
+            effective = false
+
+            if all(t -> t[1] == x, s.occBlock[g, n])  # all candidates for n in g are in one row
+                for (i, j) in ROWS[x]
+                    if !((i, j) in BLOCKS[g])
+                        # remove candidates from tiles which share row but are outside block
+                        if (i, j) in s.occRow[x, n]
+                            effective = true
+                            remCandidate(s, i, j, n)
+                        end
+                    end
+                end
+            end
+
+            if effective
+                return true
+            end
+
+
+            if all(t -> t[2] == y, s.occBlock[g, n])  # all candidates for n in g are in one column
+                for (i, j) in COLS[y]
+                    if !((i, j) in BLOCKS[g])
+                        # remove candidates from tiles which share row but are outside block
+                        if (i, j) in s.occCol[y, n]
+                            effective = true
+                            remCandidate(s, i, j, n)
+                        end
+                    end
+                end
+            end
+
+            if effective
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+
+"""
+    useBoxReduction(s)
+
+Searches for a box reduction in the sudoku s. If one is found, the candidates are removed and the function returns true. A detailed explanation
+of this strategy can be found here: http://www.taupierbw.be/SudokuCoach/SC_BoxReduction.shtml
+
+# Arguments
+* `s`: Sudoku
+"""
+function useBoxReduction(s::Sudoku)
+    for g in 1 : 9  # row
+        for n in 1 : 9
+            effective = false
+
+            b = coord2Box(first(s.occRow[g, n])[1], first(s.occRow[g, n])[2])
+
+            if all(t -> coord2Box(t[1], t[2]) == b, s.occRow[g, n])  #  all candidates for n in g are in one block
+                for (i, j) in BLOCKS[b]
+                    if !((i, j) in ROWS[g])
+                        # remove candidates from tiles which share block but are outside row
+                        if (i, j) in s.occBlock[b, n]
+                            effective = true
+                            remCandidate(s, i, j, n)
+                        end
+                    end
+                end
+            end
+
+            if effective
+                return true
+            end
+        end
+    end
+
+    for g in 1 : 9  # column
+        for n in 1 : 9
+            effective = false
+
+            b = coord2Box(first(s.occCol[g, n])[1], first(s.occCol[g, n])[2])
+
+            if all(t -> coord2Box(t[1], t[2]) == b, s.occCol[g, n])  #  all candidates for n in g are in one block
+                for (i, j) in BLOCKS[b]
+                    if !((i, j) in COLS[g])
+                        # remove candidates from tiles which share block but are outside column
+                        if (i, j) in s.occBlock[b, n]
+                            effective = true
+                            remCandidate(s, i, j, n)
+                        end
+                    end
+                end
+            end
+
+            if effective
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+
+"""
+    useXWing(s)
+
+Searches for a X-Wing pattern in the sudoku s. If one is found, the candidates are removed and the function returns true. A detailed explanation
+of this strategy can be found here: http://www.taupierbw.be/SudokuCoach/SC_XWing.shtml
+
+# Arguments
+* `s`: Sudoku
+"""
+function useXWing(s::Sudoku)
+    for g1 in 1 : 9  # row
+        nums = filter(n -> length(s.occRow[g1, n]) == 2, 1:9)  # numbers appearing exactly twice
+
+        for n in nums
+            for g2 in g1 + 1 : 9
+                if length(s.occRow[g2, n]) == 2
+                    if all(t -> (t[1] - (g2 - g1), t[2]) in s.occRow[g1, n], s.occRow[g2, n])  # n appears in both rows in exact same column
+                        effective = false
+                        
+                        for (x, y) in s.occRow[g1, n]
+                            for (i, j) in COLS[y]
+                                if i != g1 && i != g2 && (i, j) in s.occCol[j, n]
+                                    effective = true
+                                    remCandidate(s, i, j, n)
+                                end
+                            end
+                        end
+                        
+                        if effective
+                            return true
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    for g1 in 1 : 9  # column
+        nums = filter(n -> length(s.occCol[g1, n]) == 2, 1:9)  # numbers appearing exactly twice
+
+        for n in nums
+            for g2 in g1 + 1 : 9
+                if length(s.occCol[g2, n]) == 2
+                    if all(t -> (t[1], t[2] - (g2 - g1)) in s.occCol[g1, n], s.occCol[g2, n])  # n appears in both column in exact same row
+                        effective = false
+                        
+                        for (x, y) in s.occCol[g1, n]
+                            for (i, j) in ROWS[x]
+                                if j != g1 && j != g2 && (i, j) in s.occRow[j, n]
+                                    effective = true
+                                    remCandidate(s, i, j, n)
+                                end
+                            end
+                        end
+                        
+                        if effective
+                            return true
+                        end
                     end
                 end
             end
